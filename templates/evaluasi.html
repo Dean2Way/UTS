@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Evaluasi Model - Prediksi Stroke</title>
+<style>
+  :root { font-family: Inter, "Segoe UI", Arial, sans-serif; color:#172033; background:#f5f7fb; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:#f5f7fb; }
+  .page { width:min(1000px, calc(100% - 32px)); margin:0 auto; padding:44px 0; }
+  h1 { margin:0 0 6px; font-size:clamp(26px,4vw,36px); letter-spacing:-.03em; }
+  h2 { margin:0 0 14px; font-size:19px; }
+  h3 { margin:18px 0 6px; font-size:15px; }
+  .sub { color:#64748b; margin:0 0 24px; }
+  .card { background:#fff; border:1px solid #e8edf5; border-radius:18px; padding:24px; margin-bottom:18px; box-shadow:0 14px 40px rgba(34,58,94,.06); }
+  a.back { display:inline-block; margin-bottom:16px; color:#2563eb; text-decoration:none; font-weight:700; font-size:14px; }
+  p, li { line-height:1.65; font-size:14.5px; color:#344258; }
+  ul { padding-left:20px; margin:6px 0; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { border:1px solid #e2e8f0; padding:9px 11px; text-align:left; vertical-align:top; }
+  th { background:#f1f5f9; }
+  .num { text-align:center; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  .cm td { text-align:center; font-size:18px; font-weight:800; }
+  .cm .ok { background:#ecfdf5; color:#047857; }
+  .cm .bad { background:#fff1f2; color:#be123c; }
+  .cm small { display:block; font-size:11px; font-weight:600; opacity:.8; }
+  .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:14px; }
+  .stat { background:#f8fafc; border-radius:12px; padding:14px; text-align:center; }
+  .stat b { display:block; font-size:24px; color:#1d4ed8; }
+  .stat span { font-size:12px; color:#64748b; }
+  .warn { background:#fffbeb; border:1px solid #fde68a; border-radius:12px; padding:12px 14px; font-size:14px; color:#92400e; }
+  img { max-width:100%; border-radius:10px; border:1px solid #e2e8f0; }
+  .scroll { overflow-x:auto; }
+  @media (max-width:700px){ .grid2{grid-template-columns:1fr;} .stats{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+<main class="page">
+  <a class="back" href="{{ url_for('index') }}">&larr; Kembali ke prediksi</a>
+  <h1>Evaluasi Model Decision Tree</h1>
+  <p class="sub">Klasifikasi stroke, dibandingkan dengan jurnal Sidiq dkk. (JATI, 2024).</p>
+
+  <section class="card">
+    <h2>1. Sumber dan karakteristik dataset</h2>
+    <p>Dataset <i>Stroke Prediction Dataset</i> dari Kaggle (<code>healthcare-dataset-stroke-data.csv</code>), dataset yang sama dengan jurnal acuan.</p>
+    <ul>
+      <li>Jumlah data: <b>{{ m.n_rows }}</b> baris, <b>{{ m.n_cols }}</b> kolom (target: <code>stroke</code>).</li>
+      <li>Kelas stroke: <b>{{ m.n_stroke }}</b> ({{ '%.1f'|format(m.n_stroke / m.n_rows * 100) }}%), tidak stroke: <b>{{ m.n_nostroke }}</b>. Data sangat tidak seimbang (<i>imbalanced</i>).</li>
+      <li>Missing value: kolom <code>bmi</code> kosong pada <b>{{ m.n_missing_bmi }}</b> data.</li>
+      <li>Fitur: gender, age, hypertension, heart_disease, ever_married, work_type, Residence_type, avg_glucose_level, bmi, smoking_status.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>2. Preprocessing dan pembagian data</h2>
+    <ul>
+      <li>Kolom <code>id</code> dibuang (hanya pengenal). Kolom <code>heart_disease</code> juga dibuang, mengikuti jurnal.</li>
+      <li><code>bmi</code> yang kosong diisi <b>median</b>.</li>
+      <li>Fitur kategorikal diubah dengan <b>One-Hot Encoding</b>; <code>hypertension</code> diperlakukan sebagai kategori.</li>
+      <li>Pembagian data <b>80:20</b> (stratified, random_state=42): training <b>{{ m.n_train }}</b>, testing <b>{{ m.n_test }}</b>.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>3. Model</h2>
+    <p>Decision Tree (scikit-learn) dengan <code>criterion="entropy"</code>, <code>max_depth=10</code>, <code>min_samples_split=4</code>, <code>min_samples_leaf=2</code>. Kedalaman pohon hasil training <b>{{ m.depth }}</b> dengan <b>{{ m.leaves }}</b> daun.</p>
+    <p class="hint">Visualisasi pohon (3 level teratas):</p>
+    <img src="{{ url_for('static', filename='decision_tree.png') }}" alt="Pohon keputusan">
+  </section>
+
+  <section class="card">
+    <h2>4. Hasil evaluasi (data testing)</h2>
+    <div class="stats">
+      <div class="stat"><b>{{ '%.2f'|format(m.accuracy*100) }}%</b><span>Accuracy</span></div>
+      <div class="stat"><b>{{ '%.2f'|format(m.precision*100) }}%</b><span>Precision (stroke)</span></div>
+      <div class="stat"><b>{{ '%.2f'|format(m.recall*100) }}%</b><span>Recall (stroke)</span></div>
+    </div>
+    <div class="grid2">
+      <div>
+        <h3>Confusion matrix</h3>
+        <table class="cm">
+          <tr><th></th><th class="num">Prediksi Tidak Stroke</th><th class="num">Prediksi Stroke</th></tr>
+          <tr><th>Aktual Tidak Stroke</th><td class="ok">{{ m.tn }}<small>TN</small></td><td class="bad">{{ m.fp }}<small>FP</small></td></tr>
+          <tr><th>Aktual Stroke</th><td class="bad">{{ m.fn }}<small>FN</small></td><td class="ok">{{ m.tp }}<small>TP</small></td></tr>
+        </table>
+      </div>
+      <div>
+        <h3>Rumus</h3>
+        <ul>
+          <li>Accuracy = (TP+TN) / total = ({{ m.tp }}+{{ m.tn }}) / {{ m.n_test }}</li>
+          <li>Precision = TP / (TP+FP) = {{ m.tp }} / {{ m.tp + m.fp }}</li>
+          <li>Recall = TP / (TP+FN) = {{ m.tp }} / {{ m.tp + m.fn }}</li>
+        </ul>
+      </div>
+    </div>
+    <h3>Interpretasi</h3>
+    <div class="warn">
+      Akurasi tinggi menyesatkan karena hanya sekitar {{ '%.1f'|format(m.n_stroke / m.n_rows * 100) }}% data adalah stroke: model yang selalu menebak "tidak stroke" saja sudah akurat ±{{ '%.0f'|format(m.n_nostroke / m.n_rows * 100) }}%.
+      Dari {{ m.tp + m.fn }} pasien stroke di data uji, hanya {{ m.tp }} yang terdeteksi (recall {{ '%.2f'|format(m.recall*100) }}%). Secara medis, FN (stroke tidak terdeteksi) lebih berbahaya daripada FP (salah alarm).
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>5. Perbandingan dengan jurnal</h2>
+    <p>Jurnal: Sidiq, Faqih, Dwilestari, "Algoritma Decision Tree C4.5 Digunakan untuk Mengklasifikasikan Data Stroke", JATI Vol. 8 No. 2, April 2024.</p>
+    <div class="scroll">
+    <table>
+      <tr><th>Aspek</th><th>Jurnal</th><th>Project ini</th></tr>
+      <tr><td>Dataset</td><td>Kaggle Stroke Prediction</td><td>Sama</td></tr>
+      <tr><td>Algoritma</td><td>{{ j.algoritma }}</td><td>Decision Tree scikit-learn (CART, kriteria entropy)</td></tr>
+      <tr><td>Split data</td><td>80:20</td><td>80:20 (stratified)</td></tr>
+      <tr><td>Data uji</td><td>{{ j.n_test }}</td><td>{{ m.n_test }}</td></tr>
+      <tr><td>Atribut dibuang</td><td><code>heart_disease</code> (karena error)</td><td><code>id</code> dan <code>heart_disease</code> (mengikuti jurnal)</td></tr>
+      <tr><td>Missing value</td><td>Tidak dijelaskan rinci</td><td>BMI diisi median</td></tr>
+      <tr><td>Penanganan imbalance</td><td>Tidak ada</td><td>Tidak ada</td></tr>
+      <tr><td>Accuracy</td><td>{{ '%.2f'|format(j.accuracy*100) }}%</td><td>{{ '%.2f'|format(m.accuracy*100) }}%</td></tr>
+      <tr><td>Precision (stroke)</td><td>{{ '%.2f'|format(j.precision*100) }}%</td><td>{{ '%.2f'|format(m.precision*100) }}%</td></tr>
+      <tr><td>Recall (stroke)</td><td>{{ '%.2f'|format(j.recall*100) }}%</td><td>{{ '%.2f'|format(m.recall*100) }}%</td></tr>
+      <tr><td>TP / FP / FN / TN</td><td>{{ j.tp }} / {{ j.fp }} / {{ j.fn }} / {{ j.tn }}</td><td>{{ m.tp }} / {{ m.fp }} / {{ m.fn }} / {{ m.tn }}</td></tr>
+    </table>
+    </div>
+
+    <h3>Persamaan</h3>
+    <ul>
+      <li>Dataset, metode (Decision Tree), dan rasio split sama.</li>
+      <li>Akurasi sama-sama tinggi (±94%), tetapi precision dan recall kelas stroke sama-sama rendah.</li>
+      <li>Penyebab utama kesamaan: data sangat imbalanced dan tidak ada penanganan imbalance, sehingga model condong memprediksi "tidak stroke".</li>
+    </ul>
+
+    <h3>Perbedaan dan kemungkinan penyebab</h3>
+    <ul>
+      <li><b>Algoritma:</b> C4.5 memakai gain ratio dan pruning, scikit-learn memakai CART dengan entropy dan pembatasan (max_depth, min_samples). Struktur pohon dan prediksi bisa berbeda.</li>
+      <li><b>Jumlah data uji:</b> jurnal {{ j.n_test }} data, project ini {{ m.n_test }} data, sehingga angka tidak bisa dibandingkan satu-satu. Dengan kelas stroke yang sangat sedikit, selisih beberapa kasus saja mengubah precision/recall secara besar.</li>
+      <li><b>Missing value:</b> jurnal tidak menjelaskan cara menangani BMI, project ini memakai median.</li>
+      <li><b>Encoding dan tooling:</b> jurnal memakai RapidMiner, project ini scikit-learn dengan One-Hot Encoding.</li>
+      <li><b>Random split:</b> pembagian acak yang berbeda menghasilkan hasil yang berbeda.</li>
+    </ul>
+    <p>Catatan: pada jurnal, rumus precision dan recall di subbab evaluasi tertukar dengan abstraknya. Dari confusion matrix (stroke terprediksi benar 2, salah prediksi stroke 14, stroke terlewat 38), precision = 2/16 = 12,5% dan recall = 2/40 = 5%, sesuai abstrak.</p>
+  </section>
+
+  <section class="card">
+    <h2>6. Kesimpulan</h2>
+    <p>Decision Tree menghasilkan akurasi tinggi, namun kemampuan mendeteksi stroke masih rendah, sejalan dengan temuan jurnal. Akurasi bukan metrik yang cocok untuk data imbalanced; precision dan recall kelas stroke lebih relevan. Perbaikan yang bisa dilakukan: <i>class_weight</i>, oversampling (SMOTE), memakai kembali fitur <code>heart_disease</code>, serta membandingkan dengan Random Forest atau MLP.</p>
+  </section>
+</main>
+</body>
+</html>
